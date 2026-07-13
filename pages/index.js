@@ -18,9 +18,14 @@ export default function Home() {
     try {
       const res = await fetch("/api/state");
       const data = await res.json();
+      if (!res.ok) {
+        setState({ loadError: data.error || "Failed to load draft state" });
+        return;
+      }
       setState(data);
     } catch (e) {
       console.error(e);
+      setState({ loadError: "Network error loading draft state" });
     }
   }, []);
 
@@ -107,6 +112,23 @@ export default function Home() {
     return (
       <div className="container">
         <p>Loading draft board…</p>
+      </div>
+    );
+  }
+
+  if (state.loadError) {
+    return (
+      <div className="container">
+        <div className="panel">
+          <h2>Couldn't load the draft board</h2>
+          <p className="error-msg">{state.loadError}</p>
+          <p>
+            This usually means the Redis environment variables aren't set correctly in
+            Vercel yet. Check Settings → Environment Variables for
+            <code> UPSTASH_REDIS_REST_URL</code>/<code>UPSTASH_REDIS_REST_TOKEN</code> or
+            <code> KV_REST_API_URL</code>/<code>KV_REST_API_TOKEN</code>, then redeploy.
+          </p>
+        </div>
       </div>
     );
   }
