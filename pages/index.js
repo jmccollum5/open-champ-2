@@ -13,6 +13,7 @@ export default function Home() {
 
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
+  const [sortMode, setSortMode] = useState("odds"); // "odds" | "az"
 
   const fetchState = useCallback(async () => {
     try {
@@ -47,11 +48,18 @@ export default function Home() {
   }, [actor]);
 
   const filteredAvailable = useMemo(() => {
-    if (!state) return [];
+    if (!state || !state.available) return [];
     const term = search.trim().toLowerCase();
-    if (!term) return state.available;
-    return state.available.filter((g) => g.toLowerCase().includes(term));
-  }, [state, search]);
+    let list = state.available;
+    if (term) {
+      list = list.filter((g) => g.toLowerCase().includes(term));
+    }
+    if (sortMode === "az") {
+      list = [...list].sort((a, b) => a.localeCompare(b));
+    }
+    // "odds" mode: state.available already arrives favorites-first from the API.
+    return list;
+  }, [state, search, sortMode]);
 
   async function makePick(golfer) {
     setError("");
@@ -133,13 +141,21 @@ export default function Home() {
     );
   }
 
-  const { picks, onTheClock, currentPick, totalPicks, draftComplete } = state;
+  const { picks, onTheClock, currentPick, totalPicks, draftComplete, oddsByGolfer = {} } = state;
+
+  function oddsTier(winnerNum) {
+    if (winnerNum == null) return "";
+    if (winnerNum <= 2000) return "tier-favorite";
+    if (winnerNum <= 15000) return "tier-contender";
+    return "tier-longshot";
+  }
 
   return (
     <div>
       <div className="header">
-        <h1>🏆 Open Championship 2026 — Draft</h1>
-        <p>Royal Birkdale · July 16–19 · Snake draft, 7 picks each, top {SCORING_PICKS} count</p>
+        <div className="header-eyebrow">The 154th Open · Royal Birkdale</div>
+        <h1>Open Championship 2026 Draft</h1>
+        <p>July 16–19 · Snake draft · 7 picks each · top {SCORING_PICKS} score</p>
       </div>
 
       <div className="container">
@@ -180,25 +196,51 @@ export default function Home() {
 
         {!draftComplete && (
           <div className="panel">
-            <h2>Available golfers ({state.available.length})</h2>
+            <div className="panel-header-row">
+              <h2 style={{ border: "none", margin: 0, padding: 0 }}>
+                Available golfers ({state.available.length})
+              </h2>
+              <div className="sort-toggle">
+                <button
+                  className={sortMode === "odds" ? "active" : ""}
+                  onClick={() => setSortMode("odds")}
+                >
+                  DK Odds
+                </button>
+                <button
+                  className={sortMode === "az" ? "active" : ""}
+                  onClick={() => setSortMode("az")}
+                >
+                  A–Z
+                </button>
+              </div>
+            </div>
             <input
               type="text"
               placeholder="Search golfers…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "100%", marginBottom: 12 }}
+              style={{ width: "100%", margin: "12px 0" }}
             />
             <div className="available-list">
-              {filteredAvailable.map((g) => (
-                <button
-                  key={g}
-                  className="golfer-btn"
-                  disabled={submitting || !actor || actor !== onTheClock}
-                  onClick={() => makePick(g)}
-                >
-                  {g}
-                </button>
-              ))}
+              {filteredAvailable.map((g) => {
+                const odds = oddsByGolfer[g];
+                return (
+                  <button
+                    key={g}
+                    className="golfer-btn"
+                    disabled={submitting || !actor || actor !== onTheClock}
+                    onClick={() => makePick(g)}
+                  >
+                    <span className="golfer-name">{g}</span>
+                    {odds?.winner && (
+                      <span className={`odds-badge ${oddsTier(odds.winnerNum)}`}>
+                        {odds.winner}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -217,9 +259,11 @@ export default function Home() {
                 <ol>
                   {Array.from({ length: PICKS_PER_PERSON }).map((_, i) => {
                     const g = (picks[p] || [])[i];
+                    const odds = g ? oddsByGolfer[g] : null;
                     return (
                       <li key={i} className={g ? "" : "empty"}>
                         {g || "—"}
+                        {odds?.winner && <span className="pick-odds"> {odds.winner}</span>}
                       </li>
                     );
                   })}
